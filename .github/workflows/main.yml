@@ -1,0 +1,89 @@
+name: Build RGB Piano IPA
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Create App Bundle
+        run: |
+          # 1. Create the folder structure
+          mkdir -p Payload/PianoApp.app
+          
+          # 2. Create the App Settings (Info.plist)
+          cat <<EOF > Payload/PianoApp.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>PianoApp</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.themusicals.rgbpiano</string>
+            <key>CFBundleName</key>
+            <string>RGB Piano</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0</string>
+            <key>LSRequiresIPhoneOS</key>
+            <true/>
+            <key>MinimumOSVersion</key>
+            <string>14.0</string>
+            <key>UILaunchStoryboardName</key>
+            <string>LaunchScreen</string>
+          </dict>
+          </plist>
+          EOF
+
+          # 3. Create the Swift code to load your website
+          cat <<EOF > main.swift
+          import UIKit
+          import WebKit
+
+          class ViewController: UIViewController {
+              var webView: WKWebView!
+              override func viewDidLoad() {
+                  super.viewDidLoad()
+                  let config = WKWebViewConfiguration()
+                  config.allowsInlineMediaPlayback = true
+                  webView = WKWebView(frame: self.view.bounds, configuration: config)
+                  webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                  self.view.addSubview(webView)
+                  if let url = URL(string: "https://rgbpianofromrgbwebs.netlify.app/") {
+                      webView.load(URLRequest(url: url))
+                  }
+              }
+          }
+
+          @objc(AppDelegate)
+          class AppDelegate: UIResponder, UIApplicationDelegate {
+              var window: UIWindow?
+              func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+                  window = UIWindow(frame: UIScreen.main.bounds)
+                  window?.rootViewController = ViewController()
+                  window?.makeKeyAndVisible()
+                  return true
+              }
+          }
+
+          UIApplicationMain(CommandLine.argc, CommandLine.unsafeArgv, nil, NSStringFromClass(AppDelegate.self))
+          EOF
+
+      - name: Compile and Package
+        run: |
+          # Compile the Swift code into an iOS Executable
+          xcrun -sdk iphoneos swiftc main.swift \
+          -target arm64-apple-ios14.0 \
+          -sdk $(xcrun --sdk iphoneos --show-sdk-path) \
+          -framework UIKit -framework WebKit \
+          -o Payload/PianoApp.app/PianoApp
+          
+          # Zip it into an IPA
+          zip -r RGB-Piano.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: RGB-Piano-IPA
+          path: RGB-Piano.ipa
